@@ -1,0 +1,5 @@
+node_modules/
+.dry-run/
+.wrangler/
+.dev.vars
+.DS_Store
