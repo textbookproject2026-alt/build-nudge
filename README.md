@@ -19,7 +19,7 @@ does nothing else:
 - **`GET /`** reports the serving version's ID and whether its token works:
 
   ```json
-  { "worker": "build-nudge", "version": "…", "token": "works", "token_expires": "2027-09-24 …" }
+  { "worker": "build-nudge", "version": "…", "token": "works", "token_expires": "2027-09-23 22:00:00 UTC" }
   ```
 
 `reconcile` never trusts what woke it: it compares each book's served marker with
