@@ -1,0 +1,28 @@
+name: test
+
+# Tests and bundles the Worker. Deploying is by hand (README, "Deploying"), so
+# no Cloudflare credential is held here.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+      - run: npm ci
+      - run: npm test
+      - name: Bundle without deploying
+        run: npm run check

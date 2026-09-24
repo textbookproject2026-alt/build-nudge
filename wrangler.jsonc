@@ -1,0 +1,34 @@
+// build-nudge (BOOK-ONE-TO-QUARTZ §0a, §8 step 10), in the Cloudflare account
+// brandonproject2026. Deployed by hand from this directory; see README.md.
+//
+// The one secret, DISPATCH_TOKEN, is not in this file. Set it with
+// `npx wrangler versions secret put DISPATCH_TOKEN` and then deploy the version
+// that creates (README, "Changing the token"). A secret set in the dashboard can
+// land on a version that isn't serving.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "build-nudge",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-01",
+  "workers_dev": true,
+  "preview_urls": false,
+
+  // The 15-minute tick. Removing it stops the automatic rebuild of registry and
+  // builder changes, and of any push whose nudge was missed; builder-alive in
+  // the registry goes red within a day.
+  "triggers": { "crons": ["*/15 * * * *"] },
+
+  "vars": {
+    // The nudge's OIDC audience: this Worker's own address. nudge.yml in each
+    // book asks GitHub for a token with exactly this audience.
+    "AUDIENCE": "https://build-nudge.brandonproject2026.workers.dev",
+    "BUILDER_REPO": "textbookproject2026-alt/quartz-book",
+    "WORKFLOW": "reconcile.yml",
+    "REGISTRY_URL": "https://raw.githubusercontent.com/textbookproject2026-alt/textbook-registry/main/registry.json"
+  },
+
+  // GET / reports the serving version's ID, so you can tell which version is live.
+  "version_metadata": { "binding": "VERSION" },
+
+  "observability": { "enabled": true }
+}
