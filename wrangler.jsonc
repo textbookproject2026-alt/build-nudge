@@ -1,5 +1,6 @@
 // build-nudge (BOOK-ONE-TO-QUARTZ §0a, §8 step 10), in the Cloudflare account
-// brandonproject2026. Deployed by hand from this directory; see README.md.
+// brandonproject2026. Deployed by .github/workflows/deploy.yml on every merge to
+// main (or by hand from this directory); see README.md, "Deploying".
 //
 // The one secret, DISPATCH_TOKEN, is not in this file. Set it with
 // `npx wrangler versions secret put DISPATCH_TOKEN` and then deploy the version
