@@ -16,10 +16,11 @@ does nothing else:
   with Actions off) and registry or builder changes. It is here, not a GitHub
   `schedule:`, because GitHub turns schedules off in a public repo after 60 quiet
   days.
-- **`GET /`** reports the serving version's ID and whether its token works:
+- **`GET /`** reports the serving version's ID, the commit it was deployed from, and
+  whether its token works:
 
   ```json
-  { "worker": "build-nudge", "version": "…", "token": "works", "token_expires": "2027-09-23 22:00:00 UTC" }
+  { "worker": "build-nudge", "version": "…", "commit": "…", "token": "works", "token_expires": "2027-09-23 22:00:00 UTC" }
   ```
 
 `reconcile` never trusts what woke it: it compares each book's served marker with
@@ -46,24 +47,35 @@ There's no other secret. GitHub's signing keys and the registry are public.
 
 ## Deploying
 
-From this directory, on a Mac logged in to `brandonproject2026`
-(`npx wrangler login`, then `npx wrangler whoami` lists that account):
+**Every merge to `main` deploys.** When `test` is green on a push to `main`,
+`.github/workflows/deploy.yml` runs `wrangler deploy --tag <commit>`. It then waits up to
+five minutes for `GET /` to report that `commit` with `"token": "works"`, and goes red on
+the merge commit if it doesn't. It needs two repository secrets: `CLOUDFLARE_API_TOKEN`
+(Account → Workers Scripts: Edit, on `brandonproject2026`) and `CLOUDFLARE_ACCOUNT_ID`.
+Without them the job fails and says so, and the Worker keeps its previous version.
+`wrangler deploy` keeps the secret the serving version already has, so the GitHub token
+is never held in Actions.
+
+By hand, for example while those secrets are missing: from this directory, on a Mac
+logged in to `brandonproject2026` (`npx wrangler login`, then `npx wrangler whoami` lists
+that account):
 
 ```sh
 npm ci
 npm test
-npx wrangler deploy
+npx wrangler deploy --tag "$(git rev-parse HEAD)"
 ```
 
-`wrangler deploy` keeps the secret the serving version already has. Then check:
+`wrangler deploy` keeps the secret the serving version already has. The tag is what
+`GET /` reports as `commit` (`null` for a version deployed without one). Then check:
 
 ```sh
 curl -s https://build-nudge.brandonproject2026.workers.dev/
 npx wrangler deployments status
 ```
 
-**Pass:** `"token": "works"`, and the `version` in the first equals the version
-at 100% in the second.
+**Pass:** `"token": "works"`, `commit` is the commit you deployed, and the `version` in
+the first equals the version at 100% in the second.
 
 ## Changing the token
 

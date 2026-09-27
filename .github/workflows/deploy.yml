@@ -1,0 +1,87 @@
+# Deploys the Worker after every green test run on main, and fails (a red check
+# on the merge commit) if the Worker isn't serving that commit, with a working
+# token, within five minutes. The sibling of textbook-registry's deploy.yml and
+# portal.yml. Before this, deploying was by hand, so a merge here changed nothing
+# that runs.
+#
+# Mechanism: `wrangler deploy --tag <commit>`. The tag reaches the Worker through
+# its version_metadata binding, and GET / reports it as `commit`, which is what is
+# polled here. `wrangler deploy` keeps the DISPATCH_TOKEN the serving version
+# already has (README, "Changing the token"), so no GitHub token is held here.
+#
+# Needs two repository secrets (README, "Deploying"):
+#   CLOUDFLARE_API_TOKEN   Account → Workers Scripts: Edit, on brandonproject2026
+#   CLOUDFLARE_ACCOUNT_ID  brandonproject2026's account ID
+name: deploy
+
+on:
+  workflow_run:
+    workflows: [test]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-build-nudge
+  cancel-in-progress: false
+
+jobs:
+  worker:
+    # Only a green test run of a push to main. Pull requests never deploy.
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # A merge deploys its own commit; a manual run deploys main.
+          ref: ${{ github.event.workflow_run.head_sha || 'main' }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+
+      - run: npm ci
+
+      - name: Deploy, tagged with the commit
+        id: deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          for name in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID; do
+            [ -n "${!name:-}" ] || { echo "::error::the secret $name is not set in build-nudge, so this merge was not deployed and the Worker still serves its previous version. Add it under Settings > Secrets and variables > Actions (README, \"Deploying\")."; exit 1; }
+          done
+          sha="$(git rev-parse HEAD)"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          npx wrangler deploy --tag "$sha" --message "deploy.yml: $sha"
+
+      - name: Wait for the Worker to serve this commit, with a working token
+        env:
+          SHA: ${{ steps.deploy.outputs.sha }}
+        run: |
+          set -euo pipefail
+          url="$(node -e 'const c=require("fs").readFileSync("wrangler.jsonc","utf8");console.log(JSON.parse(c.replace(/^\s*\/\/.*$/gm,"")).vars.AUDIENCE)')/"
+          deadline=$(( $(date +%s) + 300 ))
+          while [ "$(date +%s)" -lt "$deadline" ]; do
+            body="$(curl -s --max-time 20 -H 'Cache-Control: no-cache' "$url" || true)"
+            commit="$(jq -r '.commit // empty' <<<"$body" 2>/dev/null || true)"
+            token="$(jq -r '.token // empty' <<<"$body" 2>/dev/null || true)"
+            if [ "$commit" = "$SHA" ]; then
+              if [ "$token" = works ]; then
+                echo "$url serves $SHA, and its token works."; jq . <<<"$body"; exit 0
+              fi
+              echo "::error::$url serves $SHA, but its token is \"$token\", so nothing rebuilds. See README, \"Changing the token\"."; jq . <<<"$body"; exit 1
+            fi
+            echo "  still serving ${commit:-<no commit>}"
+            sleep 15
+          done
+          echo "::error::$url is still serving ${commit:-<no commit>} five minutes after the deploy, not $SHA. Check \`npx wrangler deployments status\`."
+          exit 1

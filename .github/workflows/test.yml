@@ -1,7 +1,7 @@
 name: test
 
-# Tests and bundles the Worker. Deploying is by hand (README, "Deploying"), so
-# no Cloudflare credential is held here.
+# Tests and bundles the Worker. On main, a green run starts deploy.yml, which
+# deploys it (README, "Deploying"); the Cloudflare credential is used only there.
 
 on:
   push:

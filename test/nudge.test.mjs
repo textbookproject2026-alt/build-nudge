@@ -16,7 +16,7 @@ const env = {
   WORKFLOW: "reconcile.yml",
   REGISTRY_URL: "https://registry.test/registry.json",
   DISPATCH_TOKEN: "github_pat_test",
-  VERSION: { id: "v-123" },
+  VERSION: { id: "v-123", tag: "a".repeat(40) },
 }
 
 const book = (slug, repo, host, extra = {}) => ({
@@ -250,8 +250,13 @@ describe("status", () => {
   it("reports the serving version, and that its token works, with its expiry", async () => {
     const body = await (await handleStatus(env, NOW)).json()
     assert.equal(body.version, "v-123")
+    assert.equal(body.commit, "a".repeat(40))
     assert.equal(body.token, "works")
     assert.equal(body.token_expires, "2027-09-24 00:00:00 UTC")
+  })
+  it("reports no commit for a version deployed without a tag", async () => {
+    const body = await (await handleStatus({ ...env, VERSION: { id: "v-9", tag: "" } }, NOW)).json()
+    assert.equal(body.commit, null)
   })
   it("reports a missing token without calling GitHub", async () => {
     const body = await (await handleStatus({ ...env, DISPATCH_TOKEN: undefined }, NOW)).json()

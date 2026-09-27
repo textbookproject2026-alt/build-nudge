@@ -241,6 +241,9 @@ export async function handleStatus(env, now = Date.now()) {
   return json(200, {
     worker: "build-nudge",
     version: env.VERSION?.id ?? null,
+    // The commit deploy.yml tagged this version with (`wrangler deploy --tag`),
+    // or null for a version deployed by hand without one.
+    commit: env.VERSION?.tag || null,
     builder: env.BUILDER_REPO,
     workflow: env.WORKFLOW,
     ...statusCache.status,
