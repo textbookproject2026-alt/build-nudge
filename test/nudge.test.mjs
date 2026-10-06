@@ -15,6 +15,7 @@ const env = {
   BUILDER_REPO: "textbookproject2026-alt/quartz-book",
   WORKFLOW: "reconcile.yml",
   REGISTRY_URL: "https://registry.test/registry.json",
+  DRAFTS_SYNC_ACTORS: "confused4now-books[bot], quartz-book-bot[bot]",
   DISPATCH_TOKEN: "github_pat_test",
   VERSION: { id: "v-123", tag: "a".repeat(40) },
 }
@@ -143,6 +144,7 @@ describe("bookForPush", () => {
       slug: "social-research-methods",
       branch: "drafts",
       built: true,
+      drafts: true,
     })
   })
   it("marks a branch other than live and drafts as not built", () => {
@@ -189,6 +191,24 @@ describe("handleNudge", () => {
     const res = await nudge(await mint({ ref: "refs/heads/feature" }))
     assert.equal(res.status, 200)
     assert.equal(dispatches().length, 0)
+  })
+
+  it("ignores the drafts sync's own push to drafts, and nothing else", async () => {
+    const sync = await nudge(await mint({ ref: "refs/heads/drafts", actor: "Quartz-Book-Bot[bot]" }))
+    assert.equal(sync.status, 200)
+    assert.match((await sync.json()).reason, /drafts sync/)
+    assert.equal(dispatches().length, 0)
+    // The same App on the live branch, another App on drafts (the author site's
+    // commits), and a person on drafts all still nudge.
+    for (const claims of [
+      { ref: "refs/heads/main", actor: "confused4now-books[bot]" },
+      { ref: "refs/heads/drafts", actor: "textbook-suggest-edit[bot]" },
+      { ref: "refs/heads/drafts", actor: "textbookproject2026-alt" },
+    ]) {
+      resetCaches()
+      assert.equal((await nudge(await mint(claims))).status, 202, JSON.stringify(claims))
+    }
+    assert.equal(dispatches().length, 3)
   })
 
   it("coalesces a replayed token seconds later", async () => {
