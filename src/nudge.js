@@ -3,7 +3,10 @@
 //
 //   POST /   a book's nudge.yml sends its GitHub OIDC token after a push. If the
 //            token is genuine and names a branch of a book on the builder, this
-//            dispatches `reconcile` for that book with woken_by "nudge".
+//            dispatches `reconcile` for that book with woken_by "nudge". A push
+//            to a drafts branch by one of DRAFTS_SYNC_ACTORS (the Apps quartz-book's
+//            drafts sync pushes as) is ignored: the reconcile run that made it
+//            builds it, so a sync never starts another run.
 //   cron     every 15 minutes, dispatches `reconcile` for every book with
 //            woken_by "cron". GitHub schedules would switch themselves off in a
 //            quiet public repo; a Cron Trigger doesn't.
@@ -130,8 +133,9 @@ async function readRegistry(url, now) {
 
 /**
  * The book a pushed ref belongs to, the same books `reconcile` builds: on the
- * builder and not retired. Returns { slug, branch, built } or throws a Refusal (403).
- * `built` is false for a branch that is neither the book's live nor drafts branch.
+ * builder and not retired. Returns { slug, branch, built, drafts } or throws a
+ * Refusal (403). `built` is false for a branch that is neither the book's live nor
+ * drafts branch; `drafts` is true for its drafts branch.
  */
 export function bookForPush(registry, claims) {
   if (claims.event_name !== "push") {
@@ -152,7 +156,7 @@ export function bookForPush(registry, claims) {
     throw new Refusal(403, `${claims.repository} is not the repository of a book on the builder in the registry.`)
   }
   const built = branch === book.content.live_branch || branch === book.content.drafts_branch
-  return { slug: book.slug, branch, built }
+  return { slug: book.slug, branch, built, drafts: branch === book.content.drafts_branch }
 }
 
 // ---- GitHub ----------------------------------------------------------------
@@ -197,6 +201,13 @@ async function nudgeRunWaiting(env, slug, now) {
   )
 }
 
+/** Whether a push's actor is one quartz-book's drafts sync pushes as (wrangler.jsonc). */
+const isSyncActor = (env, actor) =>
+  String(env.DRAFTS_SYNC_ACTORS ?? "")
+    .split(",")
+    .map((a) => a.trim().toLowerCase())
+    .includes(String(actor ?? "").toLowerCase())
+
 // ---- Handlers (src/index.js routes to these) -------------------------------
 
 export async function handleNudge(request, env, now = Date.now()) {
@@ -206,10 +217,13 @@ export async function handleNudge(request, env, now = Date.now()) {
 
   const claims = await verifyToken(match[1], { audience: env.AUDIENCE, now })
   const registry = await readRegistry(env.REGISTRY_URL, now)
-  const { slug, branch, built } = bookForPush(registry, claims)
+  const { slug, branch, built, drafts } = bookForPush(registry, claims)
   const said = { slug, branch, repository: claims.repository }
 
   if (!built) return json(200, { ...said, dispatched: false, reason: "Only the book's live and drafts branches are built." })
+  if (drafts && isSyncActor(env, claims.actor)) {
+    return json(200, { ...said, dispatched: false, reason: "The builder's drafts sync: the run that pushed it builds it." })
+  }
 
   const last = lastDispatch.get(slug)
   if (last !== undefined && now - last < COALESCE_CERTAIN) {

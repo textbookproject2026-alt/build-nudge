@@ -25,7 +25,11 @@
     "AUDIENCE": "https://build-nudge.brandonproject2026.workers.dev",
     "BUILDER_REPO": "textbookproject2026-alt/quartz-book",
     "WORKFLOW": "reconcile.yml",
-    "REGISTRY_URL": "https://raw.githubusercontent.com/textbookproject2026-alt/textbook-registry/main/registry.json"
+    "REGISTRY_URL": "https://raw.githubusercontent.com/textbookproject2026-alt/textbook-registry/main/registry.json",
+    // The Apps quartz-book's drafts sync pushes as (books org, platform account).
+    // Their pushes to a book's drafts branch don't nudge: the reconcile run that
+    // made them builds them. Their pushes to any other branch still do.
+    "DRAFTS_SYNC_ACTORS": "confused4now-books[bot],quartz-book-bot[bot]"
   },
 
   // GET / reports the serving version's ID, so you can tell which version is live.
