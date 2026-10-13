@@ -21,10 +21,21 @@ export default {
     }
   },
 
-  // Throws on failure, so the Cron Trigger's event shows as failed in the
-  // Worker's logs. builder-alive in the registry notices the missing runs.
-  async scheduled(_event, env) {
-    await dispatch(env, { slug: "", wokenBy: "cron" })
-    console.log("cron: dispatched reconcile for every book")
+  // Every 15 minutes: reconcile for every book, and c4n-api's five-minute jobs (its
+  // write backstop and history refresh) through the service binding C4N_JOBS, because
+  // Cloudflare never ran c4n-api's own five-minute schedule (13 Oct). Neither waits on
+  // or stops the other. Throws if either failed, so the Cron Trigger's event shows as
+  // failed in the Worker's logs. builder-alive in the registry notices missing runs.
+  async scheduled(event, env) {
+    const [reconcile, jobs] = await Promise.allSettled([
+      dispatch(env, { slug: "", wokenBy: "cron" }),
+      env.C4N_JOBS ? env.C4N_JOBS.run(`build-nudge ${event?.cron || "*/15 * * * *"}`) : "no C4N_JOBS binding",
+    ])
+    if (reconcile.status === "fulfilled") console.log("cron: dispatched reconcile for every book")
+    else console.error(`cron: reconcile not dispatched: ${reconcile.reason?.message}`)
+    if (jobs.status === "fulfilled") console.log(`cron: c4n-api jobs: ${jobs.value}`)
+    else console.error(`cron: c4n-api jobs failed: ${jobs.reason?.message}`)
+    if (reconcile.status === "rejected") throw reconcile.reason
+    if (jobs.status === "rejected") throw jobs.reason
   },
 }

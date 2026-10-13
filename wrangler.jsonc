@@ -32,6 +32,11 @@
     "DRAFTS_SYNC_ACTORS": "confused4now-books[bot],quartz-book-bot[bot]"
   },
 
+  // c4n-api's Jobs entrypoint (suggest-edit-function, worker/main.mjs): the cron runs its
+  // five-minute jobs too, because Cloudflare never ran c4n-api's own schedule (13 Oct).
+  // A named entrypoint has no URL; only this binding reaches it.
+  "services": [{ "binding": "C4N_JOBS", "service": "c4n-api", "entrypoint": "Jobs" }],
+
   // GET / reports the serving version's ID, so you can tell which version is live.
   "version_metadata": { "binding": "VERSION" },
 

@@ -47,6 +47,11 @@ There's no other secret. GitHub's signing keys and the registry are public.
 
 ## Deploying
 
+The cron also runs c4n-api's five-minute jobs through the service binding `C4N_JOBS`
+(c4n-api's `Jobs` entrypoint, suggest-edit-function `worker/main.mjs`). c4n-api must be
+deployed with that entrypoint first; without it, every tick's jobs call fails and the
+Cron event shows as failed, while reconcile is still dispatched.
+
 **Every merge to `main` deploys.** When `test` is green on a push to `main`,
 `.github/workflows/deploy.yml` runs `wrangler deploy --tag <commit>`. It then waits up to
 five minutes for `GET /` to report that `commit` with `"token": "works"`, and goes red on
