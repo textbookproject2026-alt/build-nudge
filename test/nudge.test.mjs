@@ -264,6 +264,25 @@ describe("scheduled", () => {
     dispatchStatus = 403
     await assert.rejects(worker.scheduled({}, env), /403/)
   })
+  it("runs c4n-api's five-minute jobs through C4N_JOBS, named after its cron", async () => {
+    const calls = []
+    const C4N_JOBS = { run: async (source) => (calls.push(source), "waiting=0 refresh=no") }
+    await worker.scheduled({ cron: "*/15 * * * *" }, { ...env, C4N_JOBS })
+    assert.deepEqual(calls, ["build-nudge */15 * * * *"])
+    assert.equal(dispatches().length, 1, "and reconcile, as before")
+  })
+  it("still dispatches reconcile when c4n-api's jobs fail, then throws", async () => {
+    const C4N_JOBS = { run: async () => { throw new Error("c4n-api down") } }
+    await assert.rejects(worker.scheduled({ cron: "*/15 * * * *" }, { ...env, C4N_JOBS }), /c4n-api down/)
+    assert.equal(dispatches().length, 1)
+  })
+  it("still runs c4n-api's jobs when the dispatch fails", async () => {
+    dispatchStatus = 403
+    const calls = []
+    const C4N_JOBS = { run: async (source) => (calls.push(source), "ok") }
+    await assert.rejects(worker.scheduled({ cron: "*/15 * * * *" }, { ...env, C4N_JOBS }), /403/)
+    assert.equal(calls.length, 1)
+  })
 })
 
 describe("status", () => {
