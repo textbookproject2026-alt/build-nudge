@@ -1,7 +1,8 @@
 // build-nudge (BOOK-ONE-TO-QUARTZ §0a, §8 step 10). It starts quartz-book's
 // `reconcile` workflow, and does nothing else:
 //
-//   POST /   a book's nudge.yml sends its GitHub OIDC token after a push. If the
+//   POST /   a book's nudge.yml sends its GitHub OIDC token after a push (or from a
+//            scheduled or by-hand run, once its own bot merge has landed). If the
 //            token is genuine and names a branch of a book on the builder, this
 //            dispatches `reconcile` for that book with woken_by "nudge". A push
 //            to a drafts branch by one of DRAFTS_SYNC_ACTORS (the Apps quartz-book's
@@ -137,9 +138,15 @@ async function readRegistry(url, now) {
  * Refusal (403). `built` is false for a branch that is neither the book's live nor
  * drafts branch; `drafts` is true for its drafts branch.
  */
+// Runs that may nudge: a push, and a book's own scheduled or by-hand runs on a branch
+// (its contributors page merges with the workflow token, which starts no push run, so
+// that run nudges for it: platform-test-book #163, 15 Oct). Never a pull_request run.
+// A nudge only asks the builder to compare a branch with what it serves.
+const NUDGING_EVENTS = new Set(["push", "workflow_dispatch", "schedule"])
+
 export function bookForPush(registry, claims) {
-  if (claims.event_name !== "push") {
-    throw new Refusal(403, `The token is from a ${claims.event_name} run. Only push runs nudge.`)
+  if (!NUDGING_EVENTS.has(claims.event_name)) {
+    throw new Refusal(403, `The token is from a ${claims.event_name} run. Only push, scheduled and by-hand runs nudge.`)
   }
   const ref = String(claims.ref ?? "")
   if (!ref.startsWith("refs/heads/")) throw new Refusal(403, `${ref || "The ref"} is not a branch.`)
