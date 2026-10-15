@@ -162,6 +162,9 @@ describe("bookForPush", () => {
   it("refuses a tag and a pull request", () => {
     assert.throws(() => bookForPush(registry, push({ ref: "refs/tags/v1" })), { status: 403 })
     assert.throws(() => bookForPush(registry, push({ event_name: "pull_request" })), { status: 403 })
+    assert.throws(() => bookForPush(registry, push({ event_name: "pull_request_target" })), { status: 403 })
+    // A book's weekly or by-hand contributors run nudges once its page has merged.
+    for (const event_name of ["workflow_dispatch", "schedule"]) assert.equal(bookForPush(registry, push({ event_name })).built, true)
   })
 })
 
